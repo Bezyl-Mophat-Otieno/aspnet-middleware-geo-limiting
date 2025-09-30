@@ -29,10 +29,10 @@ public class GeoRestriction
         try
         {
             var ipAddress = context.Connection.RemoteIpAddress;
-            if (ipAddress is null)
-            {                
-                context.Response.StatusCode = StatusCodes.Status403Forbidden;
-                await context.Response.WriteAsJsonAsync(new {error = "Sorry we could not  identify your geographical location, try again later"});
+            if (ipAddress is null || IPAddress.IsLoopback(ipAddress))
+            {            
+                _logger.LogInformation("Skipping geo check for local request {IP}", ipAddress);
+                await _next(context);
                 return;
             }
 
