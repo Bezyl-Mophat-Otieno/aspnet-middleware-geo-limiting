@@ -1,0 +1,6 @@
+@geo_restriction_midleware_HostAddress = http://localhost:5111
+
+GET {{geo_restriction_midleware_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
