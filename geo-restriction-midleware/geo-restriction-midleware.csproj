@@ -24,5 +24,10 @@
     <ItemGroup>
       <Folder Include="Resources\Geo\" />
     </ItemGroup>
+    <ItemGroup>
+        <None Update="Resources\Geo\GeoLite2-Country.mmdb">
+            <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+        </None>
+    </ItemGroup>
 
 </Project>

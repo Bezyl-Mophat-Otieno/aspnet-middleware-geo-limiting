@@ -1,13 +1,13 @@
 using System.Net;
 using MaxMind.GeoIP2;
+using MaxMind.GeoIP2.Exceptions;
 
 namespace geo_restriction_midleware.Middlewares;
 
-public class GeoRestriction()
+public class GeoRestriction
 {
     private readonly ILogger<GeoRestriction> _logger;
     private readonly RequestDelegate _next;
-    private readonly IConfiguration _config;
     private readonly DatabaseReader _dbReader;
     private readonly HashSet<string> _blockedCountries;
 
@@ -15,8 +15,8 @@ public class GeoRestriction()
     {
         _logger = logger;
         _next = next;
-        _config = config;
-        _dbReader = new DatabaseReader("/Resources/Geo/GeoLite2-City.mmdb");
+        var path = Path.Combine(AppContext.BaseDirectory, "Resources", "Geo", "GeoLite2-Country.mmdb");
+        _dbReader = new DatabaseReader(path);
         _blockedCountries = config.GetSection("GeoRestriction:BlockedCountries")
             .Get<string[]>()?
             .ToHashSet() ?? new HashSet<string>() ;
@@ -26,16 +26,39 @@ public class GeoRestriction()
 
     public async Task InvokeAsync(HttpContext context)
     {
-        var ipAddress = context.Connection.RemoteIpAddress;
-        if (ipAddress is null)
+        try
         {
-            await context.Response.WriteAsync(
-                "Sorry we could not  identify your geographical location, try again later");
-            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-        }
-        _logger.LogInformation("IpAddress {ipAddress}", ipAddress);
-        await _next(context);
+            var ipAddress = context.Connection.RemoteIpAddress;
+            if (ipAddress is null)
+            {                
+                context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                await context.Response.WriteAsJsonAsync(new {error = "Sorry we could not  identify your geographical location, try again later"});
+                return;
+            }
 
+            var country = _dbReader.Country(ipAddress);
+            var countryCode = country.Country.IsoCode;
+            if (string.IsNullOrEmpty(countryCode) || _blockedCountries.Contains(countryCode))
+            {
+                context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                await context.Response.WriteAsJsonAsync(new { error = "We are currently not available in your country"});
+                return;
+            }
+            _logger.LogInformation("My Country {country}", country.Country.Name);
+            
+
+        }
+        catch (Exception e)
+        {
+            _logger.LogError(e.Message);
+            _logger.LogWarning("Address not found");
+            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            await context.Response.WriteAsJsonAsync(new { error = "Unable to determine your location." });
+            return;
+        }
+        
+        await _next(context);
+        
     }
 
 }
